@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+venv/
+env/
+
+# VSCode settings
+.vscode/
+
+# Mac and Windows trash files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
+*.tmp
+
+# Python build
+build/
+dist/
+*.egg-info/
+
+# ENV files
+.env
