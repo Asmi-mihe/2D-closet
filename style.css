@@ -1,0 +1,81 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #F5F5F5;
+    font-family: "Poppins", sans-serif;
+    overflow: hidden; /* Prevents scrollbars */
+}
+
+.main {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+}
+
+/* LEFT PANEL - Adjusted to fit more of the wardrobe width */
+.left {
+    width: 55%; /* Changed from 60% to help the vertical image fit better */
+    height: 100vh;
+    background-color: #fce4ec; 
+}
+
+.left img {
+    width: 100%;
+    height: 100%;
+    /* 'cover' ensures no white gaps, 'left' ensures we see the main wardrobe part */
+    object-fit: cover; 
+    object-position: left center; 
+    display: block;
+}
+
+/* RIGHT PANEL */
+.right {
+    width: 45%; /* Adjusted to match the left side change */
+    background: #F6C1CB; /* Pink from Figma */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+/* TITLE */
+.title {
+    font-family: "Playfair Display", serif;
+    font-size: 42px;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+/* LOGO - Ensure you export as PNG in Figma for transparency */
+.logo {
+    width: 220px; 
+    margin-bottom: 40px;
+}
+
+/* BUTTONS */
+.right a {
+    text-decoration: none;
+}
+
+.btn {
+    width: 200px;
+    padding: 14px;
+    margin: 10px 0;
+    border: none;
+    border-radius: 30px;
+    background: #D9A1AA;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.btn:hover {
+    background: #C98E98;
+    transform: scale(1.05);
+}
