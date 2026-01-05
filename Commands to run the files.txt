@@ -7,3 +7,16 @@ To run the following Backend functions separately:
 test_auth.py: "py -3.12 -m backend.test_auth"
 auth.py: "py -3.12 -m backend.auth"
 utils.py: "py -3.12 -m backend.utils"
+
+To sync/pull the chnages made in the VS Code to your local file manager: 
+Open Command Prompt (or Git Bash).
+
+Navigate to the repository folder:
+cd C:\2D-closet
+
+If you’re using Git Bash, you can also us
+cd /c/2D-closet
+
+Pull the latest changes from GitHub:
+git pull
+This will fetch any updates from the remote repository and merge them into your local files.
