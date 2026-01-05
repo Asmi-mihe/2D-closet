@@ -5,37 +5,46 @@
 }
 
 body {
-    background: #F5F5F5;
-    font-family: "Poppins", sans-serif;
-    overflow: hidden; /* Prevents scrollbars */
+    font-family: 'Poppins', sans-serif;
+    overflow: hidden;
 }
 
 .main {
     display: flex;
     height: 100vh;
-    width: 100%;
+    /* This creates a smooth transition from the wardrobe to the UI */
+    background: linear-gradient(to right, #fce4ec 55%, #f8bbd0 100%);
 }
 
-/* LEFT PANEL - Adjusted to fit more of the wardrobe width */
+/* WARDROBE IMAGE */
 .left {
-    width: 55%; /* Changed from 60% to help the vertical image fit better */
+    width: 55%;
     height: 100vh;
-    background-color: #fce4ec; 
+    
 }
 
 .left img {
     width: 100%;
     height: 100%;
-    /* 'cover' ensures no white gaps, 'left' ensures we see the main wardrobe part */
-    object-fit: cover; 
-    object-position: left center; 
-    display: block;
+    object-fit: cover;
+     
 }
-
-/* RIGHT PANEL */
+.lace-divider {
+    width: 40px;
+    height: 100%;
+    background-image: radial-gradient(circle at 10px 10px, transparent 10px, #ffffff 11px);
+    background-size: 20px 20px;
+    position: absolute;
+    left: 55%;
+    transform: translateX(-100%);
+    opacity: 0.3;
+    z-index: 5;
+}
+/* RIGHT PANEL POSITIONING */
 .right {
-    width: 45%; /* Adjusted to match the left side change */
-    background: #F6C1CB; /* Pink from Figma */
+    width: 50%;
+    /* Matches the warm, soft pink of the closet interiors */
+    background-color: #edb6c0; 
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -43,39 +52,77 @@ body {
     position: relative;
 }
 
-/* TITLE */
-.title {
-    font-family: "Playfair Display", serif;
-    font-size: 42px;
-    margin-bottom: 20px;
-    font-weight: bold;
+/* THE PUSH UP: This pulls all content higher on the page */
+.front-content-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: -20px;
+    gap: 30px;
+    background: rgba(255, 255, 255, 0.2); /* Very subtle glass effect */
+    padding: 70px;
+    border-radius: 50px;
+    backdrop-filter: blur(10px); /* Blends the background through the UI */
+}
+/* TITLE AND BOW ROW */
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
-/* LOGO - Ensure you export as PNG in Figma for transparency */
-.logo {
-    width: 220px; 
-    margin-bottom: 40px;
+.front-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 55px;
+    font-style: italic;
+    color: #1a1a1a;
+}
+
+.title-bow {
+    width: 50px;
+    height: auto;
+    transform: rotate(10deg);
+}
+
+/* CENTERED CIRCULAR LOGO */
+.front-logo-container {
+    background: rgba(255, 255, 255, 0.3);
+    padding: 10px;
+    border-radius: 50%;
+    backdrop-filter: blur(5px);
+}
+
+.front-logo {
+    width: 190px;
+    height: 190px;
+    border-radius: 50%; 
+    object-fit: cover;
+    display: block;
 }
 
 /* BUTTONS */
-.right a {
-    text-decoration: none;
+.front-button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* Distance between the two buttons */
 }
 
-.btn {
-    width: 200px;
-    padding: 14px;
-    margin: 10px 0;
-    border: none;
-    border-radius: 30px;
-    background: #D9A1AA;
+.front-btn {
+    width: 150px;
+    padding: 16px;
+    border-radius: 40px;
+    background-color: #d69ea4; /* Slightly deeper pink for contrast */
+    color: #131313;
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
+    /* Border to separate from the background */
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 8px 5px rgba(0, 0, 0, 0.6);
     transition: 0.3s;
 }
 
 .btn:hover {
-    background: #C98E98;
-    transform: scale(1.05);
+    background-color: #c78b95;
+    transform: translateY(-3px);
 }
