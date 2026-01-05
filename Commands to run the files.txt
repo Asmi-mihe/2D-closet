@@ -2,7 +2,7 @@ Be sure to have the python -3.12.x module installed since the pygame works on 3.
 Accordingly have the pygame
 
 To go to the project root: "cd C:\2D-closet" make sure the 2D-closet is in the file destination.
-To run the Login UI as a module: "py -3.12 -m frontend.login_ui" 
+To run the Login UI as a module: "py -3.12 -m frontend.login_uii" 
 To run the following Backend functions separately:
 test_auth.py: "py -3.12 -m backend.test_auth"
 auth.py: "py -3.12 -m backend.auth"

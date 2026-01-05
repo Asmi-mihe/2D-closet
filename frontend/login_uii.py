@@ -1,127 +1,137 @@
 import pygame
 from backend.auth import signup, login
 
-# Initialize pygame
 pygame.init()
 
-# Window settings
+# -------------------- CONFIG --------------------
 WIDTH, HEIGHT = 500, 600
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Mon Armoire Login/Signup")
+pygame.display.set_caption("Mon Armoire")
 
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-LIGHT_BLUE = (173, 216, 230)
-GRAY = (200, 200, 200)
-BUTTON_HOVER = (135, 206, 250)
+HOME, LOGIN, SIGNUP = "home", "login", "signup"
+screen = HOME
 
-# Fonts
+# -------------------- COLORS --------------------
+WHITE = (250, 250, 250)
+BLACK = (30, 30, 30)
+BLUE = (180, 215, 255)
+HOVER = (160, 200, 245)
+GRAY = (210, 210, 210)
+RED = (200, 50, 50)
+
+# -------------------- FONTS --------------------
 FONT = pygame.font.Font(None, 36)
-LABEL_FONT = pygame.font.Font(None, 28)
+SMALL = pygame.font.Font(None, 24)
 
-# Load and scale logo
-LOGO_IMG = pygame.image.load(r"C:\Mon Armoire Logo.png") 
-LOGO_IMG = pygame.transform.scale(LOGO_IMG, (150, 150))
-WIN.blit(LOGO_IMG, (WIDTH//2 - LOGO_IMG.get_width()//2, 50))
+# -------------------- LOGO --------------------
+LOGO = pygame.image.load("C:\\Mon Armoire Logo.png")
+LOGO = pygame.transform.scale(LOGO, (140, 140))
 
-# Input box class
+# -------------------- INPUT BOX --------------------
 class InputBox:
-    def __init__(self, x, y, w, h, text='', is_password=False):
+    def __init__(self, x, y, w, h, password=False):
         self.rect = pygame.Rect(x, y, w, h)
-        self.color = GRAY
-        self.text = text
-        self.txt_surface = FONT.render(text, True, BLACK)
+        self.text = ""
         self.active = False
-        self.is_password = is_password
+        self.password = password
 
-    def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            self.active = self.rect.collidepoint(event.pos)
-            self.color = LIGHT_BLUE if self.active else GRAY
-
-        if event.type == pygame.KEYDOWN and self.active:
-            if event.key == pygame.K_RETURN:
-                pass
-            elif event.key == pygame.K_BACKSPACE:
+    def handle(self, e):
+        if e.type == pygame.MOUSEBUTTONDOWN:
+            self.active = self.rect.collidepoint(e.pos)
+        if e.type == pygame.KEYDOWN and self.active:
+            if e.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
-            else:
-                self.text += event.unicode
+            elif e.key != pygame.K_RETURN:
+                self.text += e.unicode
 
-            display_text = '*' * len(self.text) if self.is_password else self.text
-            self.txt_surface = FONT.render(display_text, True, BLACK)
+    def draw(self):
+        pygame.draw.rect(WIN, BLUE if self.active else GRAY, self.rect, 2, 8)
+        txt = "*" * len(self.text) if self.password else self.text
+        WIN.blit(FONT.render(txt, True, BLACK), (self.rect.x + 8, self.rect.y + 8))
 
-    def draw(self, win):
-        win.blit(self.txt_surface, (self.rect.x + 5, self.rect.y + 5))
-        pygame.draw.rect(win, self.color, self.rect, 2)
+# -------------------- BUTTON --------------------
+def button(rect, text):
+    hover = rect.collidepoint(pygame.mouse.get_pos())
+    pygame.draw.rect(WIN, HOVER if hover else BLUE, rect, border_radius=10)
+    WIN.blit(FONT.render(text, True, BLACK), FONT.render(text, True, BLACK).get_rect(center=rect.center))
+    return hover
 
-# Create input boxes
-username_box = InputBox(150, 250, 200, 40)
-password_box = InputBox(150, 320, 200, 40, is_password=True)
-input_boxes = [username_box, password_box]
+# -------------------- INPUTS --------------------
+su_user = InputBox(150, 230, 200, 42)
+su_email = InputBox(150, 285, 200, 42)
+su_pass = InputBox(150, 340, 200, 42, True)
 
-# Buttons
-signup_rect = pygame.Rect(150, 400, 90, 40)
-login_rect = pygame.Rect(260, 400, 90, 40)
+li_user = InputBox(150, 270, 200, 42)
+li_pass = InputBox(150, 325, 200, 42, True)
 
-def draw_button(win, rect, text, hover=False):
-    color = BUTTON_HOVER if hover else LIGHT_BLUE
-    pygame.draw.rect(win, color, rect, border_radius=8)
-    txt_surf = FONT.render(text, True, BLACK)
-    txt_rect = txt_surf.get_rect(center=rect.center)
-    win.blit(txt_surf, txt_rect)
-
-# Message
 message = ""
 
-# Main loop
+# -------------------- LOOP --------------------
 run = True
 while run:
     WIN.fill(WHITE)
+    WIN.blit(LOGO, (WIDTH//2 - 70, 30))
 
-    # Draw logo
-    WIN.blit(LOGO_IMG, (WIDTH//2 - LOGO_IMG.get_width()//2, 50))
-
-    # Draw labels
-    username_label = LABEL_FONT.render("Username:", True, BLACK)
-    password_label = LABEL_FONT.render("Password:", True, BLACK)
-    WIN.blit(username_label, (username_box.rect.x, username_box.rect.y - 25))
-    WIN.blit(password_label, (password_box.rect.x, password_box.rect.y - 25))
-
-    # Draw input boxes
-    for box in input_boxes:
-        box.draw(WIN)
-
-    # Draw buttons with hover effect
-    mouse_pos = pygame.mouse.get_pos()
-    draw_button(WIN, signup_rect, "Signup", hover=signup_rect.collidepoint(mouse_pos))
-    draw_button(WIN, login_rect, "Login", hover=login_rect.collidepoint(mouse_pos))
-
-    # Draw message below buttons
-    msg_surf = FONT.render(message, True, BLACK)
-    WIN.blit(msg_surf, (WIDTH//2 - msg_surf.get_width()//2, login_rect.y + 60))
-
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+    for e in pygame.event.get():
+        if e.type == pygame.QUIT:
             run = False
-        for box in input_boxes:
-            box.handle_event(event)
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if signup_rect.collidepoint(event.pos):
-                try:
-                    success, msg = signup(username_box.text, password_box.text)
+
+        if screen == HOME and e.type == pygame.MOUSEBUTTONDOWN:
+            if login_btn.collidepoint(e.pos):
+                screen = LOGIN
+            if signup_btn.collidepoint(e.pos):
+                screen = SIGNUP
+
+        if screen == SIGNUP:
+            for b in [su_user, su_email, su_pass]:
+                b.handle(e)
+            if e.type == pygame.MOUSEBUTTONDOWN:
+                if submit.collidepoint(e.pos):
+                    ok, msg = signup(su_user.text, su_email.text, su_pass.text)
                     message = msg
-                except Exception as e:
-                    message = str(e)
-            if login_rect.collidepoint(event.pos):
-                try:
-                    success, msg = login(username_box.text, password_box.text)
+                    if ok:
+                        screen = HOME
+                if back.collidepoint(e.pos):
+                    screen = HOME
+
+        if screen == LOGIN:
+            for b in [li_user, li_pass]:
+                b.handle(e)
+            if e.type == pygame.MOUSEBUTTONDOWN:
+                if submit.collidepoint(e.pos):
+                    ok, msg = login(li_user.text, li_pass.text)
                     message = msg
-                except Exception as e:
-                    message = str(e)
+                if back.collidepoint(e.pos):
+                    screen = HOME
+
+    # -------------------- DRAW --------------------
+    if screen == HOME:
+        login_btn = pygame.Rect(150, 330, 200, 45)
+        signup_btn = pygame.Rect(150, 390, 200, 45)
+        button(login_btn, "Login")
+        button(signup_btn, "Signup")
+
+    if screen == SIGNUP:
+        for txt, box in zip(["Username", "Email", "Password"], [su_user, su_email, su_pass]):
+            WIN.blit(SMALL.render(txt, True, BLACK), (box.rect.x, box.rect.y - 22))
+            box.draw()
+        submit = pygame.Rect(150, 400, 200, 45)
+        back = pygame.Rect(20, 20, 80, 35)
+        button(submit, "Create Account")
+        button(back, "Back")
+
+    if screen == LOGIN:
+        for txt, box in zip(["Username or Email", "Password"], [li_user, li_pass]):
+            WIN.blit(SMALL.render(txt, True, BLACK), (box.rect.x, box.rect.y - 22))
+            box.draw()
+        submit = pygame.Rect(150, 400, 200, 45)
+        back = pygame.Rect(20, 20, 80, 35)
+        button(submit, "Login")
+        button(back, "Back")
+
+    if message:
+        WIN.blit(SMALL.render(message, True, RED), (WIDTH//2 - 90, HEIGHT - 40))
 
     pygame.display.flip()
 
 pygame.quit()
-
-
