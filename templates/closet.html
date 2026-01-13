@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Mon Armoire - Closet</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -19,15 +19,17 @@
         
         <div class="sidebar-footer">
             <button class="clear-btn" onclick="clearOutfit()">Clear Outfit</button>
-            <a href="menu.html" class="back-circle-btn">←</a>
+            <a href="{{ url_for('menu') }}" class="back-circle-btn">←</a>
         </div>
     </div>
 
     <div class="wardrobe-main">
         <h1 id="category-heading">My Tops</h1>
         <div class="clothes-grid">
-            <div class="item-slot" onclick="wearItem('images/top1.png')"><img src="images/top1.png" alt="Top 1"></div>
-            <div class="item-slot" onclick="wearItem('images/top2.png')"><img src="images/top2.png" alt="Top 2"></div>
+            <div class="item-slot" data-img="{{ url_for('static', filename='images/dress1.png') }}" onclick="wearItem(this.dataset.img)">
+                <img src="{{ url_for('static', filename='images/dress1.png') }}" alt="Dress 1"></div>
+            <div class="item-slot" data-img="{{ url_for('static', filename='images/dress2.png') }}" onclick="wearItem(this.dataset.img)">
+                <img src="{{ url_for('static', filename='images/dress2.png') }}" alt="Dress 2"></div>
             <div class="item-slot"></div>
             <div class="item-slot"></div>
             <div class="item-slot"></div>
@@ -36,7 +38,7 @@
     </div>
 
     <div class="avatar-preview">
-        <img src="images/avatar.png" alt="Dummy" class="avatar-dummy">
+        <img src="{{ url_for('static', filename='images/avatar.png') }}" alt="Dummy" class="avatar-dummy">
         <img src="" id="clothing-layer" class="clothing-on-body">
     </div>
 </div>

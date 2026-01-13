@@ -27,8 +27,8 @@
                 </div>
 
                 <div class="front-button-group">
-                    <a href="menu.html"><button class="front-btn">Sign up</button></a>
-                    <a href="menu.html"><button class="front-btn">Login</button></a>
+                    <a href="{{ url_for('auth', mode='signup') }}"><button class="front-btn">Sign up</button></a>
+                    <a href="{{ url_for('auth', mode='login') }}"><button class="front-btn">Login</button></a>
                 </div>
 
             </div>
