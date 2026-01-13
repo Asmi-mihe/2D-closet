@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mon Armoire - Closet</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet">
+</head>
+<body>
+   <div class="closet-container">
+    <div class="sidebar">
+        <h2 class="sidebar-title">Categories</h2>
+        <ul class="category-list">
+            <li class="active" onclick="showCategory('tops')">Tops</li>
+            <li onclick="showCategory('pants')">Pants</li>
+            <li onclick="showCategory('skirts')">Skirts</li>
+            <li onclick="showCategory('dresses')">Dresses</li>
+        </ul>
+        
+        <div class="sidebar-footer">
+            <button class="clear-btn" onclick="clearOutfit()">Clear Outfit</button>
+            <a href="menu.html" class="back-circle-btn">←</a>
+        </div>
+    </div>
+
+    <div class="wardrobe-main">
+        <h1 id="category-heading">My Tops</h1>
+        <div class="clothes-grid">
+            <div class="item-slot" onclick="wearItem('images/top1.png')"><img src="images/top1.png" alt="Top 1"></div>
+            <div class="item-slot" onclick="wearItem('images/top2.png')"><img src="images/top2.png" alt="Top 2"></div>
+            <div class="item-slot"></div>
+            <div class="item-slot"></div>
+            <div class="item-slot"></div>
+            <div class="item-slot"></div>
+        </div>
+    </div>
+
+    <div class="avatar-preview">
+        <img src="images/avatar.png" alt="Dummy" class="avatar-dummy">
+        <img src="" id="clothing-layer" class="clothing-on-body">
+    </div>
+</div>
+
+    <script>
+        // Function to put clothes on the dummy
+        function wearItem(imgSrc) {
+            const layer = document.getElementById('clothing-layer');
+            layer.src = imgSrc;
+            layer.style.display = "block";
+        }
+
+        // Function to remove all clothes
+        function clearOutfit() {
+            const layer = document.getElementById('clothing-layer');
+            layer.src = "";
+            layer.style.display = "none";
+        }
+
+        // Function to change the visible category
+        function showCategory(name) {
+            document.getElementById('category-heading').innerText = "My " + name.charAt(0).toUpperCase() + name.slice(1);
+            
+            // This updates the active styling in the sidebar
+            document.querySelectorAll('.category-list li').forEach(li => {
+                li.classList.remove('active');
+                if(li.innerText.toLowerCase() === name) li.classList.add('active');
+            });
+        }
+    </script>
+</body> 
+</html>
