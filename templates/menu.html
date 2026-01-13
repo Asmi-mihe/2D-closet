@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Mon Armoire - Menu</title>
-    <link rel="stylesheet" href="menu.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='menu.css') }}">
 </head>
 <body>
     <div class="menu-container">
@@ -13,7 +13,7 @@
         </div>
 
         <div class="action-box">
-            <a href="closet.html" class="pill-btn">
+            <a href="{{ url_for('closet') }}" class="pill-btn">
                 <div class="icon-circle">
                     <img src="{{ url_for('static', filename='images/hanger.png') }}" alt="Hanger">
                 </div>

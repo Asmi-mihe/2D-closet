@@ -1,5 +1,5 @@
 Be sure to have the python -3.12.x module installed since the pygame works on 3.12 not on the 3.14.
-Accordingly have the pygame
+Accordingly download the pygame
 
 To go to the project root: "cd C:\2D-closet" make sure the 2D-closet is in the file destination.
 To run the Login UI as a module: "py -3.12 -m frontend.login_uii" 
@@ -8,15 +8,22 @@ test_auth.py: "py -3.12 -m backend.test_auth"
 auth.py: "py -3.12 -m backend.auth"
 utils.py: "py -3.12 -m backend.utils"
 
-To sync/pull the chnages made in the VS Code to your local file manager: 
-Open Command Prompt (or Git Bash).
-
-Navigate to the repository folder:
+To sync/pull the changes made in the VS Code to your local file manager: 
+1. Open Command Prompt (or Git Bash).
+2.Navigate to the repository folder:
 cd C:\2D-closet
-
-If you’re using Git Bash, you can also us
-cd /c/2D-closet
-
-Pull the latest changes from GitHub:
+    If you’re using Git Bash, you can also use
+    cd /c/2D-closet
+3. Pull the latest changes from GitHub:
 git pull
+
 This will fetch any updates from the remote repository and merge them into your local files.
+
+To run the project in your laptop 
+1. Open the cmd in the laptop 
+2. Type (cd C:\2D-closet)[Do not copy the brackets too. Run the code inside the bracket.]
+3. If the flask is already installed, run python app.py
+    If its not uploaded then, run (pip install flask) and then run (python app.py)
+4. You should see smtg like Running on http://127.0.0.1:5000, now run the http://127.0.0.1:5000 in your browser.
+5. Now you have the running project on your own local laptop. 
+ 

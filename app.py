@@ -10,5 +10,9 @@ def index():
 def menu():
     return render_template("menu.html")
 
+@app.route("/closet")
+def closet():
+    return render_template("closet.html")  # if you have this page
+
 if __name__ == "__main__":
     app.run(debug=True)
