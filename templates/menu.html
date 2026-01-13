@@ -9,20 +9,20 @@
     <div class="menu-container">
         
         <div class="logo-wrapper">
-            <img src="/static/images/logo.png" alt="Logo">
+            <img src="{{ url_for('static', filename='images/bow.png') }}" alt="Logo">
         </div>
 
         <div class="action-box">
             <a href="closet.html" class="pill-btn">
                 <div class="icon-circle">
-                    <img src="/static/images/hanger.png" alt="Hanger">
+                    <img src="{{ url_for('static', filename='images/hanger.png') }}" alt="Hanger">
                 </div>
                 <span>Go to closet</span>
             </a>
 
             <label for="upload" class="pill-btn">
                 <div class="icon-circle">
-                    <img src="/static/images/camera.png" alt="Camera">
+                    <img src="{{ url_for('static', filename='images/camera.png') }}" alt="Camera">
                 </div>
                 <span>Click/Upload</span>
             </label>
@@ -30,7 +30,7 @@
         </div>
 
         <div class="character-wrapper">
-            <img src="/static/images/pixel_girl.png" alt="Mascot">
+            <img src="{{ url_for('static', filename='images/pixel_girl.png') }}" alt="Mascot">
         </div>
 
     </div>

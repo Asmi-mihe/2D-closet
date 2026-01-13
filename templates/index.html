@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mon Armoire</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,700&family=Poppins:wght@600&display=swap" rel="stylesheet">
 </head>
 <body>
 
     <div class="main">
         <div class="left">
-            <img src="/static/images/wardrobe.png" alt="Wardrobe">
+            <img src="{{ url_for('static', filename='images/wardrobe.png') }}" alt="Wardrobe">
         </div>
         <div class="lace-divider"></div>
 
@@ -19,11 +19,11 @@
             <div class="front-content-stack">
                  <div class="title-row">
                     <h1 class="front-title">Mon Armoire</h1>
-                    <img src="/static/images/bow.png" alt="Bow" class="title-bow">
+                    <img src="{{ url_for('static', filename='images/bow.png') }}" alt="Bow" class="title-bow">
                 </div>
 
                 <div class="front-logo-container">
-                    <img src="/static/images/logo.png" alt="Logo" class="front-logo">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="front-logo">
                 </div>
 
                 <div class="front-button-group">
