@@ -7,7 +7,7 @@ users = {}
 
 # ------------------ ROUTES ------------------
 
-# Main landing page
+# Main landing page aka index page
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -40,7 +40,7 @@ def auth():
         elif action == "login":
             if username in users and users[username] == password:
                 # Redirect directly to wardrobe page after login
-                return redirect(url_for("closet"))
+                return redirect(url_for("menu"))
             else:
                 error_msg = "Invalid username or password."
         elif action == "signup":
