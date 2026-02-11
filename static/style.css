@@ -352,3 +352,56 @@ body {
     display: none; /* Shown on hover */
     z-index: 10;
 }
+
+/* Styling for worn items */
+.item-slot.worn {
+    border: 3px solid #FFD700;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.6);
+    position: relative;
+}
+        
+.item-slot.worn::after {
+    content: "WEARING";
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: linear-gradient(135deg, #FFD700, #FFA500);
+    color: #333;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 10;
+}
+        
+/* Upload error message styling */
+.upload-error {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #ff4757;
+    color: white;
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999;
+    animation: slideIn 0.3s ease-out;
+    max-width: 400px;
+}
+        
+.upload-success {
+    background: #2ed573;
+}
+
+.upload-error .close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    float: right;
+    margin-left: 10px;
+}

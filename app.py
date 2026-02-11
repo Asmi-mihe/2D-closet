@@ -5,6 +5,8 @@ import os
 import uuid
 import mysql.connector
 from werkzeug.security import generate_password_hash, check_password_hash
+import cv2
+import numpy as np
 
 from processing import fit_on_dummy, build_outfit
 
@@ -25,6 +27,45 @@ DB_CONFIG = {
     "password": "password",
     "database": "closet_asmi"
 }
+
+# ------------------ HELPER: Validate if image is clothing ------------------
+def is_valid_clothing_image(image_path):
+    """
+    Basic validation to check if the uploaded image looks like clothing.
+    Returns (is_valid, reason)
+    """
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return False, "Unable to read image"
+        
+        # Convert to HSV for color analysis
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        
+        # Check for skin tones (faces/body parts)
+        # Skin tone range in HSV: H: 0-20, S: 20-150, V: 80-255
+        lower_skin = np.array([0, 20, 80], dtype=np.uint8)
+        upper_skin = np.array([20, 150, 255], dtype=np.uint8)
+        skin_mask = cv2.inRange(hsv, lower_skin, upper_skin)
+        skin_percentage = (np.count_nonzero(skin_mask) / skin_mask.size) * 100
+        
+        # If more than 30% of image is skin tone, likely not clothing
+        if skin_percentage > 30:
+            return False, "Image appears to contain a person's face or body. Please upload clothing items only."
+        
+        # Check if image is too uniform (likely not clothing with texture/patterns)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        variance = cv2.Laplacian(gray, cv2.CV_64F).var()
+        
+        # If variance is too low, image might be too plain (screenshot, solid color, etc.)
+        if variance < 10:
+            return False, "Image appears too uniform. Please upload a clear photo of a clothing item."
+        
+        # Passed basic checks
+        return True, "Valid clothing image"
+        
+    except Exception as e:
+        return False, f"Error validating image: {str(e)}"
 
 # ------------------ NAVIGATION ------------------
 @app.route("/")
@@ -52,12 +93,13 @@ def closet():
 
         images.append({
             "url": url_for("static", filename=f"uploads/{filename}"),
-            "type": g_type
+            "type": g_type,
+            "filename": filename
         })
 
     return render_template("closet.html", images=images)
 
-# ------------------ UPLOAD ------------------
+# ------------------ UPLOAD WITH VALIDATION ------------------
 @app.route("/upload", methods=["POST"])
 def upload_file():
     if "image" not in request.files:
@@ -67,32 +109,70 @@ def upload_file():
     if file.filename == "":
         return jsonify({"success": False, "error": "No selected file"}), 400
 
-    img = Image.open(file).convert("RGBA")
+    # Save temporarily for validation
+    temp_filename = f"temp_{uuid.uuid4().hex}.png"
+    temp_path = os.path.join(UPLOAD_FOLDER, temp_filename)
+    
+    try:
+        img = Image.open(file).convert("RGBA")
+        img.save(temp_path, "PNG")
+        
+        # Validate if it's a clothing item
+        is_valid, validation_message = is_valid_clothing_image(temp_path)
+        
+        if not is_valid:
+            os.remove(temp_path)  # Clean up temp file
+            return jsonify({
+                "success": False, 
+                "error": validation_message
+            }), 400
+        
+        # Determine garment type from filename
+        name = file.filename.lower()
+        
+        # FIXED: More specific matching with priority order
+        if any(x in name for x in ["skirt", "skrt"]):
+            g_type = "skirt"
+        elif any(x in name for x in ["dress", "gown", "frock"]):
+            g_type = "dress"
+        elif any(x in name for x in ["top", "shirt", "tshirt", "t-shirt", "blouse", "sweater", "hoodie", "jacket"]):
+            g_type = "top"
+        elif any(x in name for x in ["pant", "pants", "trouser", "jeans", "bottom", "shorts"]):
+            g_type = "bottom"
+        else:
+            # Fallback: use aspect ratio
+            w, h = img.size
+            if h / w > 1.5:
+                g_type = "dress"  # Tall and narrow
+            elif h / w < 0.8:
+                g_type = "bottom"  # Short and wide
+            else:
+                g_type = "top"  # Default
+        
+        # Rename with proper type prefix
+        final_filename = f"{g_type}_{uuid.uuid4().hex}.png"
+        final_path = os.path.join(UPLOAD_FOLDER, final_filename)
+        
+        # Move temp file to final location
+        os.rename(temp_path, final_path)
+        
+        image_url = url_for("static", filename=f"uploads/{final_filename}")
 
-    name = file.filename.lower()
-    if any(x in name for x in ["top", "shirt", "tshirt", "blouse"]):
-        g_type = "top"
-    elif any(x in name for x in ["pant", "trouser", "jeans", "bottom"]):
-        g_type = "bottom"
-    elif any(x in name for x in ["dress", "gown"]):
-        g_type = "dress"
-    elif any(x in name for x in ["skirt", "shorts"]):
-        g_type = "skirt"
-    else:
-        w, h = img.size
-        g_type = "top" if h / w < 1.2 else "dress"
-
-    filename = f"{g_type}_{uuid.uuid4().hex}.png"
-    save_path = os.path.join(UPLOAD_FOLDER, filename)
-    img.save(save_path, "PNG")
-
-    image_url = url_for("static", filename=f"uploads/{filename}")
-
-    return jsonify({
-        "success": True,
-        "url": image_url,
-        "type": g_type
-    })
+        return jsonify({
+            "success": True,
+            "url": image_url,
+            "type": g_type,
+            "message": f"Successfully uploaded as {g_type}"
+        })
+        
+    except Exception as e:
+        # Clean up temp file if it exists
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        return jsonify({
+            "success": False,
+            "error": f"Upload failed: {str(e)}"
+        }), 500
 
 # ------------------ TRY-ON (WITH OUTFIT TRACKING) ------------------
 @app.route("/tryon", methods=["POST"])
@@ -117,9 +197,9 @@ def tryon():
         filename = os.path.basename(image_url)
         garment_path = os.path.join(UPLOAD_FOLDER, filename)
 
-        # Normalize garment type
-        if garment_type in ["skirts", "skirt"]:
-            normalized_type = "bottom"  # Treat skirts as bottoms for layering
+        # Normalize garment type (skirt is separate, not bottom)
+        if garment_type in ["skirts"]:
+            normalized_type = "skirt"
         else:
             normalized_type = garment_type
 
@@ -128,9 +208,16 @@ def tryon():
             # Dress replaces everything
             outfit_tracker[session_id] = {"dress": garment_path}
         else:
-            # Remove dress if adding top or bottom
+            # Remove dress if adding top or bottom or skirt
             if "dress" in outfit_tracker[session_id]:
                 del outfit_tracker[session_id]["dress"]
+            
+            # If adding skirt or bottom, remove the other (can't wear both)
+            if normalized_type in ["skirt", "bottom"]:
+                if "skirt" in outfit_tracker[session_id]:
+                    del outfit_tracker[session_id]["skirt"]
+                if "bottom" in outfit_tracker[session_id]:
+                    del outfit_tracker[session_id]["bottom"]
             
             # Add/update the garment
             outfit_tracker[session_id][normalized_type] = garment_path
@@ -144,8 +231,9 @@ def tryon():
             return jsonify({
                 "success": True,
                 "url": result_url,
-                "type": garment_type,
-                "current_outfit": list(outfit_tracker[session_id].keys())
+                "type": normalized_type,
+                "current_outfit": list(outfit_tracker[session_id].keys()),
+                "worn_items": {k: os.path.basename(v) for k, v in outfit_tracker[session_id].items()}
             })
 
         return jsonify({"success": False, "error": "Image processing failed"}), 500

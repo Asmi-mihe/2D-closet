@@ -7,7 +7,7 @@ import uuid
 
 # Permanent session cache
 fitting_cache = {}
-# Track current outfit state per session (in production, use session management)
+# Track current outfit state per session
 outfit_state = {}
 
 
@@ -18,7 +18,7 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None, session_id="def
     
     Args:
         input_path: Path to the garment image
-        garment_type: 'top', 'bottom', or 'dress'
+        garment_type: 'top', 'bottom', 'skirt', or 'dress'
         base_dummy_path: Optional path to a previous result to overlay on (for combining garments)
         session_id: Session identifier for tracking outfit state
     
@@ -81,12 +81,12 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None, session_id="def
    
     # 5. Anatomical reference points (proportional to dummy)
     SHOULDER_WIDTH = int(AV_W * 0.46)   # Shoulder span
-    WAIST_WIDTH = int(AV_W * 0.42)      # Waist width (slightly wider)
+    WAIST_WIDTH = int(AV_W * 0.42)      # Waist width
     HIP_WIDTH = int(AV_W * 0.50)        # Hip width
     
     # Vertical anchor points - ADJUSTED for better positioning
     SHOULDER_Y = int(AV_H * 0.21)       # Shoulder line (tops/dresses start here)
-    WAIST_Y = int(AV_H * 0.40)          # Waist line (bottoms start here) - MOVED UP
+    WAIST_Y = int(AV_H * 0.40)          # Waist line (bottoms/skirts start here)
     
     # 6. Calculate target dimensions based on garment type
     # CRITICAL: Maintain aspect ratio - scale by width, then calculate height
@@ -120,8 +120,23 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None, session_id="def
         anchor_y = SHOULDER_Y
         print("Fitting TOP")
         
-    elif garment_type in ["bottom", "skirt", "skirts"]:
-        # Bottoms fit at waist/hips - IMPROVED POSITIONING
+    elif garment_type == "skirt":
+        # SKIRT: Similar to bottom but typically shorter and wider at hem
+        target_w = HIP_WIDTH + 5  # Slightly wider than regular bottoms
+        scale = target_w / w
+        target_h = int(h * scale)
+        
+        # Skirts are usually shorter than pants
+        max_skirt_h = int((AV_H - WAIST_Y) * 0.6)  # 60% of bottom area
+        if target_h > max_skirt_h:
+            target_h = max_skirt_h
+            target_w = int(target_h * (w / h))
+        
+        anchor_y = WAIST_Y
+        print("Fitting SKIRT")
+        
+    elif garment_type == "bottom":
+        # Bottoms (pants) fit at waist/hips
         target_w = HIP_WIDTH
         scale = target_w / w
         target_h = int(h * scale)
@@ -133,7 +148,7 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None, session_id="def
             target_w = int(target_h * (w / h))
         
         anchor_y = WAIST_Y
-        print(f"Fitting BOTTOM ({garment_type})")
+        print("Fitting BOTTOM (pants)")
         
     else:
         # Default fallback (treat as top)
@@ -202,7 +217,7 @@ def build_outfit(garments_dict, session_id="default"):
     Builds a complete outfit by layering multiple garments.
     
     Args:
-        garments_dict: Dictionary with keys 'top', 'bottom', 'dress' containing file paths
+        garments_dict: Dictionary with keys 'top', 'bottom', 'skirt', 'dress' containing file paths
                       Example: {'top': 'path/to/shirt.png', 'bottom': 'path/to/pants.png'}
         session_id: Session identifier
     
@@ -212,9 +227,9 @@ def build_outfit(garments_dict, session_id="default"):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     dummy_path = os.path.join(script_dir, 'static/images/avatar.png')
     
-    # Order matters: dress first (if present), then bottom, then top
-    # This ensures tops appear over bottoms
-    order = ['dress', 'bottom', 'skirt', 'skirts', 'top']
+    # Order matters: dress first (if present), then bottom/skirt, then top
+    # This ensures tops appear over bottoms/skirts
+    order = ['dress', 'skirt', 'bottom', 'top']
     
     current_base = None
     result_url = None

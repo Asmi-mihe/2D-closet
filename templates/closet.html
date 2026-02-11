@@ -5,6 +5,19 @@
     <title>Mon Armoire - Closet</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,700&display=swap" rel="stylesheet">
+    <style>
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
 </head>
 <body>
 <div class="closet-container">
@@ -27,7 +40,10 @@
         <h1 id="category-heading">My Tops</h1>
         <div class="clothes-grid" id="clothes-grid">
             {% for img in images %}
-            <div class="item-slot" data-type="{{ img.type }}" onclick="wearItem('{{ img.url }}', '{{ img.type }}')">
+            <div class="item-slot" 
+                 data-type="{{ img.type }}" 
+                 data-filename="{{ img.filename }}"
+                 onclick="wearItem('{{ img.url }}', '{{ img.type }}', '{{ img.filename }}')">
                 <button class="delete-btn" onclick="deleteItem(event, '{{ img.url }}')">×</button>
                 <img src="{{ img.url }}" alt="Clothing Item">
             </div>
@@ -51,16 +67,46 @@
 
 <script>
 let currentCategory = 'top';
-const jsCache = {}; 
-let currentOutfit = {}; // Track what's currently worn
+let currentOutfit = {}; // Track what's currently worn: { type: filename }
 
-async function wearItem(imgUrl, type) {
+function showNotification(message, isSuccess = false) {
+    const notification = document.createElement('div');
+    notification.className = isSuccess ? 'upload-error upload-success' : 'upload-error';
+    notification.innerHTML = `
+        <button class="close-btn" onclick="this.parentElement.remove()">×</button>
+        <strong>${isSuccess ? '✓' : '⚠'} ${message}</strong>
+    `;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(400px)';
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
+}
+
+function updateWornHighlights() {
+    // Remove all worn highlights
+    document.querySelectorAll('.item-slot').forEach(slot => {
+        slot.classList.remove('worn');
+    });
+    
+    // Add worn highlights based on current outfit
+    for (const [type, filename] of Object.entries(currentOutfit)) {
+        const slot = document.querySelector(`.item-slot[data-filename="${filename}"]`);
+        if (slot) {
+            slot.classList.add('worn');
+        }
+    }
+}
+
+async function wearItem(imgUrl, type, filename) {
     const layer = document.getElementById('clothing-layer');
     const spinner = document.getElementById('loading-spinner');
     const curtain = document.getElementById('changing-curtain');
     
-    // Normalize type (treat skirts as bottom for caching)
-    const normalizedType = (type === 'skirt' || type === 'skirts') ? 'bottom' : type;
+    // Normalize type
+    const normalizedType = (type === 'skirts') ? 'skirt' : type;
 
     // 1. Close the curtains immediately
     curtain.classList.add('closed');
@@ -82,17 +128,18 @@ async function wearItem(imgUrl, type) {
             const data = await response.json();
 
             if (data.success) {
-                // Update current outfit tracking
-                if (normalizedType === 'dress') {
-                    currentOutfit = { dress: imgUrl };
-                } else {
-                    if (currentOutfit.dress) {
-                        delete currentOutfit.dress;
+                // Update current outfit tracking with server response
+                if (data.worn_items) {
+                    currentOutfit = {};
+                    for (const [itemType, itemFilename] of Object.entries(data.worn_items)) {
+                        currentOutfit[itemType] = itemFilename;
                     }
-                    currentOutfit[normalizedType] = imgUrl;
                 }
-
+                
                 console.log('Current outfit:', currentOutfit);
+                
+                // Update visual highlights
+                updateWornHighlights();
 
                 // Pre-load image so it doesn't "pop" in after curtains open
                 const img = new Image();
@@ -108,11 +155,13 @@ async function wearItem(imgUrl, type) {
                 };
             } else {
                 console.error("Try-on failed:", data.error);
+                showNotification(data.error || "Try-on failed", false);
                 spinner.style.display = "none";
                 curtain.classList.remove('closed');
             }
         } catch (error) {
             console.error("Try-on failed", error);
+            showNotification("Try-on failed. Please try again.", false);
             spinner.style.display = "none";
             curtain.classList.remove('closed');
         }
@@ -136,12 +185,11 @@ function showCategory(category) {
     const activeEl = document.getElementById('cat-' + category);
     if(activeEl) activeEl.classList.add('active');
 
-    // Filter items
+    // Filter items - FIXED: Proper skirt filtering
     document.querySelectorAll('.item-slot').forEach(item => {
         const itemType = item.dataset.type;
-        // Show if type matches, or if showing skirts and item is skirt/skirts
-        const shouldShow = (itemType === category) || 
-                          (category === 'skirt' && (itemType === 'skirt' || itemType === 'skirts'));
+        // Exact match for category
+        const shouldShow = (itemType === category);
         item.style.display = shouldShow ? "flex" : "none";
     });
 }
@@ -152,6 +200,7 @@ async function clearOutfit() {
     
     // Clear client-side tracking
     currentOutfit = {};
+    updateWornHighlights();
     
     // Clear server-side tracking
     try {
@@ -177,6 +226,7 @@ async function deleteItem(event, imgUrl) {
     if(!confirm("Are you sure you want to delete this item?")) return;
 
     const slot = event.target.closest('.item-slot');
+    const filename = slot.dataset.filename;
 
     try {
         const response = await fetch('/delete_item', {
@@ -188,16 +238,27 @@ async function deleteItem(event, imgUrl) {
         const data = await response.json();
 
         if(data.success) {
+            // Remove from worn items if it was worn
+            for (const [type, fname] of Object.entries(currentOutfit)) {
+                if (fname === filename) {
+                    delete currentOutfit[type];
+                }
+            }
+            updateWornHighlights();
+            
             slot.style.transition = "0.3s";
             slot.style.opacity = "0";
             slot.style.transform = "scale(0.8)";
             setTimeout(() => slot.remove(), 300);
+            
+            showNotification("Item deleted successfully", true);
         } else {
-            alert("Delete failed: " + data.error);
+            showNotification("Delete failed: " + data.error, false);
         }
 
     } catch (e) {
         console.error("Delete failed", e);
+        showNotification("Delete failed. Please try again.", false);
     }
 }
 
