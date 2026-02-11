@@ -1,377 +1,259 @@
-from fileinput import filename
 import cv2
 import numpy as np
 from rembg import remove
 from PIL import Image
 import os
+import uuid
 
-def fit_on_dummy(filename, garment_type):
-    # Load dummy (561x998)
-    # This finds the folder where processing.py is actually saved
+# Permanent session cache
+fitting_cache = {}
+
+
+def fit_on_dummy(input_path, garment_type, base_dummy_path=None):
+    """
+    Fits garment on dummy as a flat overlay (sticker-like) without body wrapping.
+    Maintains aspect ratio and centers garment at anatomically correct positions.
+    
+    Args:
+        input_path: Path to the garment image
+        garment_type: 'top', 'bottom', or 'dress'
+        base_dummy_path: Optional path to a previous result to overlay on (for combining garments)
+    
+    Returns:
+        Relative URL path to the result image
+    """
+    global fitting_cache
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    dummy_path = os.path.join(script_dir, 'dummy.png')
-    input_path = os.path.join(script_dir, 'image_processing', filename)  # automatically inside image_processing
-
+   
+    # 1. Check Cache
+    cache_key = f"{os.path.basename(input_path)}_{garment_type}"
+    if base_dummy_path:
+        cache_key = f"{cache_key}_overlay_{os.path.basename(base_dummy_path)}"
     
-    # Load dummy using the full absolute path
-    dummy = cv2.imread(dummy_path, cv2.IMREAD_UNCHANGED)
-   
-    if dummy is None:
-        print(f"Error: Could not find '{dummy_path}'")
+    if cache_key in fitting_cache:
+        return fitting_cache[cache_key]
+
+    # 2. Load Dummy (or previous result for overlay)
+    if base_dummy_path and os.path.exists(base_dummy_path):
+        dummy = cv2.imread(base_dummy_path, cv2.IMREAD_UNCHANGED)
+        print(f"Loading base image from: {base_dummy_path}")
+    else:
+        dummy_path = os.path.join(script_dir, 'static/images/avatar.png')
+        dummy = cv2.imread(dummy_path, cv2.IMREAD_UNCHANGED)
+    
+    if dummy is None: 
+        print("Error: Dummy avatar not found")
         return None
+
+    # Convert to BGRA if needed for consistent alpha handling
+    if len(dummy.shape) == 2 or dummy.shape[2] == 3:
+        dummy = cv2.cvtColor(dummy, cv2.COLOR_BGR2BGRA)
+
+    # 3. Process Garment
+    if not os.path.exists(input_path):
+        print(f"Error: Garment image not found: {input_path}")
+        return None
+        
+    input_img = Image.open(input_path).convert("RGBA")
+    input_img.thumbnail((1200, 1200))  # Increased for better quality
    
-    # Process garment
-    try:
-        input_img = Image.open(input_path)
-    except FileNotFoundError:
-        print(f"Error: Could not find '{input_path}'. Check the file path!")
+    no_bg = remove(input_img, alpha_matting=False)
+    garment_cv = cv2.cvtColor(np.array(no_bg), cv2.COLOR_RGBA2BGRA)
+   
+    # Auto-Crop to remove empty space
+    alpha = garment_cv[:, :, 3]
+    y, x = np.where(alpha > 0)
+    if len(y) == 0: 
+        print("Error: Garment is empty or fully transparent")
         return None
     
-    input_img = Image.open(input_path)
-    print(f"Processing '{filename}'...")
+    cropped = garment_cv[np.min(y):np.max(y)+1, np.min(x):np.max(x)+1]
+
+    # 4. Get dimensions
+    h, w = cropped.shape[:2]
+    AV_H, AV_W = dummy.shape[:2]
+    
+    print(f"Dummy size: {AV_W}x{AV_H}")
+    print(f"Original garment size: {w}x{h}")
    
-    no_bg = remove(input_img)
-    cv_garment = cv2.cvtColor(np.array(no_bg), cv2.COLOR_RGBA2BGRA)
-   
-    # Crop to content
-    alpha = cv_garment[:,:,3]
-    y, x = np.where(alpha > 0)
-    if len(y) == 0 or len(x) == 0:
-        print("Error: No visible content found in the image after background removal!")
-        return None
-   
-    cropped = cv_garment[np.min(y):np.max(y), np.min(x):np.max(x)]
-   
-    # Key measurements for 561x998 dummy
+    # 5. Anatomical reference points (proportional to dummy)
+    SHOULDER_WIDTH = int(AV_W * 0.46)   # Shoulder span
+    WAIST_WIDTH = int(AV_W * 0.42)      # Waist width (slightly wider)
+    HIP_WIDTH = int(AV_W * 0.50)        # Hip width
+    
+    # Vertical anchor points - ADJUSTED for better positioning
+    SHOULDER_Y = int(AV_H * 0.21)       # Shoulder line (tops/dresses start here)
+    WAIST_Y = int(AV_H * 0.40)         # Waist line (bottoms start here) - MOVED UP
+    
+    # 6. Calculate target dimensions based on garment type
+    # CRITICAL: Maintain aspect ratio - scale by width, then calculate height
     if garment_type == "dress":
-        shoulder_width = 200
-        neck_y = 240
-        max_length = 350
-       
-        h, w = cropped.shape[:2]
-        target_w = shoulder_width
-        target_h = int(target_w * (h/w))
-       
-        if target_h > max_length:
-            target_h = max_length
-            target_w = int(target_h * (w/h))
-       
-        resized = cv2.resize(cropped, (target_w, target_h))
-        anchor_x = (561 - target_w) // 2
-        anchor_y = neck_y
-       
+        # Dress fits at shoulders, extends downward to feet
+        target_w = SHOULDER_WIDTH + 10  # Slightly wider for dress flow
+        scale = target_w / w
+        target_h = int(h * scale)
+        
+        # Allow dress to extend to near bottom of dummy
+        max_h = int(AV_H - SHOULDER_Y - 15)  # Leave small margin at bottom
+        if target_h > max_h:
+            target_h = max_h
+            target_w = int(target_h * (w / h))  # Recalculate width to maintain ratio
+        
+        anchor_y = SHOULDER_Y
+        print("Fitting DRESS")
+        
     elif garment_type == "top":
-        shoulder_width = 200
-        neck_y = 330
-        max_length = 200
-       
-        h, w = cropped.shape[:2]
-        target_w = shoulder_width
-        target_h = int(target_w * (h/w))
-       
-        if target_h > max_length:
-            target_h = max_length
-            target_w = int(target_h * (w/h))
-       
-        resized = cv2.resize(cropped, (target_w, target_h))
-        anchor_x = (561 - target_w) // 2
-        anchor_y = neck_y
-       
-    else:  # bottoms
-        waist_width = 180
-        waist_y = 440
-        max_length = 400
-       
-        h, w = cropped.shape[:2]
-        target_w = waist_width
-        target_h = int(target_w * (h/w))
-       
-        if target_h > max_length:
-            target_h = max_length
-            target_w = int(target_h * (w/h))
-       
-        resized = cv2.resize(cropped, (target_w, target_h))
-        anchor_x = (561 - target_w) // 2
-        anchor_y = waist_y
-   
-    # Ensure we don't go out of bounds
-    end_y = min(anchor_y + resized.shape[0], 998)
-    end_x = min(anchor_x + resized.shape[1], 561)
-    resized_crop = resized[:end_y-anchor_y, :end_x-anchor_x]
-   
-    # Overlay with alpha blending
-    for c in range(0, 3):
-        alpha_s = resized_crop[:, :, 3] / 255.0
-        alpha_l = 1.0 - alpha_s
-        dummy[anchor_y:end_y, anchor_x:end_x, c] = \
-            (alpha_s * resized_crop[:, :, c] +
-             alpha_l * dummy[anchor_y:end_y, anchor_x:end_x, c])
-   
-    # Update alpha channel
-    dummy[anchor_y:end_y, anchor_x:end_x, 3] = np.maximum(
-        dummy[anchor_y:end_y, anchor_x:end_x, 3],
-        resized_crop[:, :, 3]
-    )
-   
-    # Save
-    result_path = f"final_look_{garment_type}.png"
-    cv2.imwrite(result_path, dummy)
-    print(f"✓ Saved to {result_path}")
-    return result_path
-
-
-# === HOW TO USE ===
-# Make sure these files are in the same folder as your script:
-# 1. dummy.png (import cv2
-import numpy as np
-from rembg import remove
-from PIL import Image
-
-
-def fit_on_dummy(input_path, garment_type):
-    # Load dummy (561x998)
-    dummy = cv2.imread('dummy.png', cv2.IMREAD_UNCHANGED)
-   
-    if dummy is None:
-        print("Error: Could not find 'dummy.png'")
-        return None
-   
-    # Process garment
-    try:
-        input_img = Image.open(input_path)
-    except FileNotFoundError:
-        print(f"Error: Could not find '{input_path}'")
-        return None
-   
-    print("Removing background...")
-    no_bg = remove(input_img)
-    cv_garment = cv2.cvtColor(np.array(no_bg), cv2.COLOR_RGBA2BGRA)
-   
-    # Crop to content
-    alpha = cv_garment[:,:,3]
-    y, x = np.where(alpha > 0)
-    if len(y) == 0 or len(x) == 0:
-        print("Error: No visible content found!")
-        return None
-   
-    cropped = cv_garment[np.min(y):np.max(y), np.min(x):np.max(x)]
-    garment_h, garment_w = cropped.shape[:2]
-   
-    # EXACT MEASUREMENTS FROM YOUR DUMMY (all in pixels)
-    HAIR_TOP = 228  # Calculated from 998 - 770
-    NECK_Y = HAIR_TOP + 159  # = 387 (from hair to neck)
-    SHOULDER_WIDTH = 160
-    CHEST_WIDTH = 109
-    WAIST_WIDTH = 74
-    BUST_WIDTH = 108
-    WAIST_Y = HAIR_TOP + 303  # = 531 (from hair to waist/pant point)
-    PANTS_START_Y = WAIST_Y
-    PANTS_LENGTH = 404
-    TOTAL_HEIGHT = 770  # From hair to bottom
-   
-    if garment_type == "dress":
-        # Analyze garment neckline (top 5%)
-        neckline_sample = cropped[0:max(1, int(garment_h*0.05)), :]
-        neckline_alpha = neckline_sample[:, :, 3]
-       
-        neck_widths = []
-        for row in neckline_alpha:
-            non_zero = np.where(row > 0)[0]
-            if len(non_zero) > 10:
-                neck_widths.append(non_zero[-1] - non_zero[0])
-       
-        if neck_widths:
-            garment_neck_width = np.median(neck_widths)
-        else:
-            garment_neck_width = garment_w * 0.4
-       
-        # Analyze garment shoulder area (5-15% from top)
-        shoulder_sample = cropped[int(garment_h*0.05):int(garment_h*0.15), :]
-        shoulder_alpha = shoulder_sample[:, :, 3]
-       
-        shoulder_widths = []
-        for row in shoulder_alpha:
-            non_zero = np.where(row > 0)[0]
-            if len(non_zero) > 20:
-                shoulder_widths.append(non_zero[-1] - non_zero[0])
-       
-        if shoulder_widths:
-            garment_shoulder_width = np.median(shoulder_widths)
-            # Scale based on shoulders for better fit
-            scale = SHOULDER_WIDTH / garment_shoulder_width
-        else:
-            # Fallback to neck scaling
-            scale = CHEST_WIDTH / garment_neck_width
-       
-        new_w = int(garment_w * scale)
-        new_h = int(garment_h * scale)
-       
-        # Limit to reasonable dress size
-        max_width = SHOULDER_WIDTH + 20  # 180px
-        max_height = WAIST_Y - NECK_Y + 150  # Neck to below waist (~294px)
-       
-        if new_w > max_width:
-            scale_down = max_width / new_w
-            new_w = max_width
-            new_h = int(new_h * scale_down)
-       
-        if new_h > max_height:
-            scale_down = max_height / new_h
-            new_h = max_height
-            new_w = int(new_w * scale_down)
-       
-        resized = cv2.resize(cropped, (new_w, new_h))
-        anchor_x = (561 - new_w) // 2
-        anchor_y = NECK_Y
-       
-    elif garment_type == "top":
-        # Analyze neckline
-        neckline_sample = cropped[0:max(1, int(garment_h*0.05)), :]
-        neckline_alpha = neckline_sample[:, :, 3]
-       
-        neck_widths = []
-        for row in neckline_alpha:
-            non_zero = np.where(row > 0)[0]
-            if len(non_zero) > 10:
-                neck_widths.append(non_zero[-1] - non_zero[0])
-       
-        if neck_widths:
-            garment_neck_width = np.median(neck_widths)
-        else:
-            garment_neck_width = garment_w * 0.4
-       
-        # Analyze shoulder area
-        shoulder_sample = cropped[int(garment_h*0.05):int(garment_h*0.15), :]
-        shoulder_alpha = shoulder_sample[:, :, 3]
-       
-        shoulder_widths = []
-        for row in shoulder_alpha:
-            non_zero = np.where(row > 0)[0]
-            if len(non_zero) > 20:
-                shoulder_widths.append(non_zero[-1] - non_zero[0])
-       
-        if shoulder_widths:
-            garment_shoulder_width = np.median(shoulder_widths)
-            scale = SHOULDER_WIDTH / garment_shoulder_width
-        else:
-            scale = CHEST_WIDTH / garment_neck_width
-       
-        new_w = int(garment_w * scale)
-        new_h = int(garment_h * scale)
-       
-        # Tops should fit from neck to waist/slightly below
-        max_width = SHOULDER_WIDTH + 20  # 180px
-        max_height = WAIST_Y - NECK_Y + 20  # Neck to just past waist (~164px)
-       
-        if new_w > max_width:
-            scale_down = max_width / new_w
-            new_w = max_width
-            new_h = int(new_h * scale_down)
-       
-        if new_h > max_height:
-            scale_down = max_height / new_h
-            new_h = max_height
-            new_w = int(new_w * scale_down)
-       
-        resized = cv2.resize(cropped, (new_w, new_h))
-        anchor_x = (561 - new_w) // 2
-        anchor_y = NECK_Y
-       
-    else:  # bottoms (skirts, pants, shorts)
-        # Analyze waistband (top 5%)
-        waist_sample = cropped[0:max(1, int(garment_h*0.05)), :]
-        waist_alpha = waist_sample[:, :, 3]
-       
-        waist_widths = []
-        for row in waist_alpha:
-            non_zero = np.where(row > 0)[0]
-            if len(non_zero) > 10:
-                waist_widths.append(non_zero[-1] - non_zero[0])
-       
-        if waist_widths:
-            garment_waist_width = np.median(waist_widths)
-        else:
-            garment_waist_width = garment_w * 0.8
-       
-        # Scale based on waist width
-        scale = WAIST_WIDTH / garment_waist_width
-       
-        new_w = int(garment_w * scale)
-        new_h = int(garment_h * scale)
-       
-        # Bottoms can use full pants length
-        max_width = WAIST_WIDTH + 40  # 114px
-        max_height = PANTS_LENGTH  # 404px (full pant length)
-       
-        if new_w > max_width:
-            scale_down = max_width / new_w
-            new_w = max_width
-            new_h = int(new_h * scale_down)
-       
-        if new_h > max_height:
-            scale_down = max_height / new_h
-            new_h = max_height
-            new_w = int(new_w * scale_down)
-       
-        resized = cv2.resize(cropped, (new_w, new_h))
-        anchor_x = (561 - new_w) // 2
-        anchor_y = PANTS_START_Y
-   
-    # Ensure bounds
-    end_y = min(anchor_y + resized.shape[0], 998)
-    end_x = min(anchor_x + resized.shape[1], 561)
-   
-    if anchor_y < 0:
-        resized = resized[-anchor_y:, :]
-        anchor_y = 0
+        # Top fits at shoulders, limited to torso area
+        target_w = SHOULDER_WIDTH
+        scale = target_w / w
+        target_h = int(h * scale)
+        
+        # Limit to torso length (shoulders to below waist)
+        max_top_h = int(WAIST_Y - SHOULDER_Y + 120)
+        if target_h > max_top_h:
+            target_h = max_top_h
+            target_w = int(target_h * (w / h))
+        
+        anchor_y = SHOULDER_Y
+        print("Fitting TOP")
+        
+    elif garment_type == "bottom":
+        # Bottoms fit at waist/hips - IMPROVED POSITIONING
+        target_w = HIP_WIDTH
+        scale = target_w / w
+        target_h = int(h * scale)
+        
+        # Allow bottoms to extend down but not off the dummy
+        max_bottom_h = int(AV_H - WAIST_Y - 15)  # Leave margin at feet
+        if target_h > max_bottom_h:
+            target_h = max_bottom_h
+            target_w = int(target_h * (w / h))
+        
+        anchor_y = WAIST_Y
+        print("Fitting BOTTOM")
+        
+    else:
+        # Default fallback (treat as top)
+        print(f"Warning: Unknown garment type '{garment_type}', defaulting to 'top'")
+        target_w = SHOULDER_WIDTH
+        scale = target_w / w
+        target_h = int(h * scale)
+        anchor_y = SHOULDER_Y
+    
+    print(f"Scaled garment size: {target_w}x{target_h}")
+    
+    # 7. Resize with high-quality interpolation (maintains aspect ratio)
+    resized = cv2.resize(cropped, (target_w, target_h), interpolation=cv2.INTER_LANCZOS4)
+    
+    # 8. Center horizontally on dummy
+    anchor_x = (AV_W - target_w) // 2
+    
+    # Bounds checking
     if anchor_x < 0:
-        resized = resized[:, -anchor_x:]
         anchor_x = 0
-   
-    resized_crop = resized[:end_y-anchor_y, :end_x-anchor_x]
-   
-    print(f"Garment size: {resized_crop.shape[1]}x{resized_crop.shape[0]}px")
-    print(f"Position: ({anchor_x}, {anchor_y})")
-    print(f"Type: {garment_type}")
-   
-    # Overlay with alpha blending
-    for c in range(0, 3):
-        alpha_s = resized_crop[:, :, 3] / 255.0
-        alpha_l = 1.0 - alpha_s
-        dummy[anchor_y:end_y, anchor_x:end_x, c] = \
-            (alpha_s * resized_crop[:, :, c] +
-             alpha_l * dummy[anchor_y:end_y, anchor_x:end_x, c])
-   
+    if anchor_y < 0:
+        anchor_y = 0
+
+    # 9. Calculate overlay region with safety checks
+    y1, y2 = anchor_y, min(anchor_y + target_h, AV_H)
+    x1, x2 = anchor_x, min(anchor_x + target_w, AV_W)
+    
+    # Slice the resized garment to fit within bounds
+    resized_part = resized[0:y2-y1, 0:x2-x1]
+    
+    print(f"Placement position: ({x1}, {y1}) to ({x2}, {y2})")
+
+    # 10. Alpha blending for smooth overlay
+    alpha_s = resized_part[:, :, 3] / 255.0
+    alpha_l = 1.0 - alpha_s
+    
+    for c in range(3):
+        dummy[y1:y2, x1:x2, c] = (
+            alpha_s * resized_part[:, :, c] + 
+            alpha_l * dummy[y1:y2, x1:x2, c]
+        )
+    
     # Update alpha channel
-    dummy[anchor_y:end_y, anchor_x:end_x, 3] = np.maximum(
-        dummy[anchor_y:end_y, anchor_x:end_x, 3],
-        resized_crop[:, :, 3]
+    dummy[y1:y2, x1:x2, 3] = np.maximum(
+        dummy[y1:y2, x1:x2, 3],
+        resized_part[:, :, 3]
     )
+
+    # 11. Save result
+    out_name = f"final_{uuid.uuid4().hex}.png"
+    out_path = os.path.join(script_dir, 'static/uploads', out_name)
+    
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    
+    cv2.imwrite(out_path, dummy)
+    print(f"✓ Saved result to {out_path}")
    
-    # Save
-    result_path = f"final_look_{garment_type}.png"
-    cv2.imwrite(result_path, dummy)
-    print(f"✓ Success! Saved to {result_path}")
-    return result_path
+    relative_url = f"/static/uploads/{out_name}"
+    fitting_cache[cache_key] = relative_url
+    return relative_url
 
 
+def fit_multiple_garments(garment_configs, script_dir=None):
+    """
+    Fits multiple garments on the same dummy (e.g., top + bottom).
+    
+    Args:
+        garment_configs: List of tuples [(garment_path, garment_type), ...]
+                        Example: [('shirt.png', 'top'), ('pants.png', 'bottom')]
+        script_dir: Optional script directory path
+    
+    Returns:
+        Relative URL path to the final combined result
+    """
+    if script_dir is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    if not garment_configs:
+        print("Error: No garments provided")
+        return None
+    
+    # Start with the base dummy
+    dummy_path = os.path.join(script_dir, 'static/images/avatar.png')
+    current_result = None
+    
+    # Apply each garment in order
+    for i, (garment_path, garment_type) in enumerate(garment_configs):
+        print(f"\n--- Applying garment {i+1}/{len(garment_configs)}: {garment_type} ---")
+        
+        if i == 0:
+            # First garment - use original dummy
+            result_url = fit_on_dummy(garment_path, garment_type, base_dummy_path=None)
+        else:
+            # Subsequent garments - overlay on previous result
+            previous_path = os.path.join(script_dir, current_result.lstrip('/'))
+            result_url = fit_on_dummy(garment_path, garment_type, base_dummy_path=previous_path)
+        
+        if result_url:
+            current_result = result_url
+        else:
+            print(f"Error: Failed to fit {garment_type}")
+            return current_result  # Return what we have so far
+    
+    print(f"\n✓ Successfully combined {len(garment_configs)} garments")
+    return current_result
 
 
-# === MAIN EXECUTION ===
+# Example usage
 if __name__ == "__main__":
-    # For the pink top/dress
-    fit_on_dummy('test_top.png', 'top')
-   
-    # Or try as dress:
-    # fit_on_dummy('test_top.png', 'dress')the base model image you uploaded)
-# 2. Your garment image (the pink dress)
-
-
-# Then run with the correct filename:
-fit_on_dummy('test_top.png', 'top')  # If your top image is named 'test_top.png'
-
-
-# OR use the full path:
-# fit_on_dummy(r'C:\Users\Acer\Desktop\project\2D-closet\image_processing\your_top.png', 'top')
-
-
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Single garment examples:
+    # result = fit_on_dummy('top.png', 'top')
+    # result = fit_on_dummy('skirt.png', 'bottom')
+    # result = fit_on_dummy('dress.png', 'dress')
+    
+    # Multiple garments (outfit combination):
+    # outfit = [
+    #     ('shirt.png', 'top'),
+    #     ('pants.png', 'bottom')
+    # ]
+    # result = fit_multiple_garments(outfit)
+    # print(f"Final result: {result}")
+    
+    pass

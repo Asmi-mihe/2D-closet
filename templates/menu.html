@@ -34,5 +34,34 @@
         </div>
 
     </div>
+
+    <script>
+        // Grab the input
+        const uploadInput = document.getElementById('upload');
+        uploadInput.addEventListener('change', () => {
+    if (!uploadInput.files.length) return alert("Please select a file!");
+
+    const file = uploadInput.files[0];
+    const formData = new FormData();
+    formData.append('image', file);
+
+    fetch('/upload', { method: 'POST', body: formData })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Trigger a custom event with the uploaded image info
+                window.dispatchEvent(new CustomEvent('uploadedClothing', {
+                    detail: { url: data.url, type: data.type }
+                }));
+                alert(`Upload successful! Detected type: ${data.type}`);
+            } else {
+                alert("Upload failed: " + (data.error || "Unknown error"));
+            }
+        })
+        .catch(err => alert("Upload error: " + err));
+});
+
+    </script>
+
 </body>
 </html>

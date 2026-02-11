@@ -216,34 +216,68 @@ body {
     object-fit: contain;
 }
 
-/* Avatar preview */
+/* ---------------- AVATAR PREVIEW ---------------- */
 .avatar-preview {
-    width: 350px; /* wider so avatar looks taller */
-    height: 800px; /* taller height */
+    width: 350px;           /* base width for avatar */
+    max-width: 90vw;        /* responsive to screen size */
+    height: 800px;          /* base height for avatar */
     position: relative;
-    margin-top: -100px; /* pushes the avatar up */
+    margin-top: -100px;     /* adjust vertical placement */
     display: flex;
     justify-content: center;
-    align-items: flex-end; /* bottom-align the avatar for better clothes overlay */
+    align-items: flex-end;  /* bottom-align avatar for clothes overlay */
 }
 
 .avatar-dummy {
-    width: auto;      /* let width adjust */
-    height: 100%;     /* full height of container */
+    width: 100%;            /* fill container width */
+    height: auto;           /* scale proportionally */
     object-fit: contain;
+    display: block;
 }
 
+/* ---------------- CLOTHING LAYERS ---------------- */
 .clothing-on-body {
     position: absolute;
-    bottom: 0;       /* align to avatar's bottom */
-    left: 50%;
+    left: 50%;              /* center horizontally */
     transform: translateX(-50%);
-    width: auto;  
-    height: 100%;    /* scale width automatically */
-    display: none;
-    pointer-events: none;
+    display: none;          /* hidden by default */
+    pointer-events: none;   /* clicks pass through */
     object-fit: contain;
     z-index: 2;
+    width: 100%;            /* scale to avatar width */
+    height: auto;           /* maintain aspect ratio */
+    transition: all 0.3s ease; /* smooth try-on animation */
+}
+
+/* ---------------- CLOTHING TYPE SIZING ---------------- */
+.clothing-top {
+    top: 10%;               /* aligns with shoulders */
+    height: 35%;            /* covers upper body */
+}
+
+.clothing-bottom {
+    top: 50%;               /* aligns with waist */
+    height: 45%;            /* covers legs */
+}
+
+.clothing-dress {
+    top: 5%;                /* starts slightly above shoulders */
+    height: 90%;            /* covers full body */
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 15px 30px;
+    border-radius: 50px;
+    font-weight: bold;
+    color: #d69ea4;
+    z-index: 100;
+    display: none;
+    border: 2px solid #f2c6c6;
 }
 
 .clear-btn {
@@ -262,4 +296,59 @@ body {
 .clear-btn:hover {
     background-color: #e6b0b0; /* slightly darker on hover */
     transform: translateY(-2px);
+}
+
+/* --- CHANGING ROOM CURTAINS --- */
+.curtain-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    z-index: 50; /* Above the avatar, below the spinner */
+    pointer-events: none; /* Allows clicks to pass through when open */
+    overflow: hidden;
+}
+
+.curtain-side {
+    width: 50%;
+    height: 100%;
+    background-color: #f8bbd0; /* Matches your right-panel pink */
+    background-image: repeating-linear-gradient(
+        90deg,
+        rgba(0, 0, 0, 0.05) 0px,
+        rgba(0, 0, 0, 0.05) 1px,
+        transparent 1px,
+        transparent 30px
+    ); /* Subtle fabric pleat effect */
+    transition: transform 0.8s cubic-bezier(0.45, 0.05, 0.55, 0.95);
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+}
+
+/* Left curtain moves left, right curtain moves right */
+.curtain-left { transform: translateX(-100%); border-right: 2px solid rgba(255,255,255,0.3); }
+.curtain-right { transform: translateX(100%); border-left: 2px solid rgba(255,255,255,0.3); }
+
+/* When the 'closed' class is added, they meet in the middle */
+.curtain-container.closed .curtain-left,
+.curtain-container.closed .curtain-right {
+    transform: translateX(0);
+}
+
+/* Delete Button Style */
+.delete-btn {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background: #ff5252;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    cursor: pointer;
+    font-size: 14px;
+    display: none; /* Shown on hover */
+    z-index: 10;
 }
