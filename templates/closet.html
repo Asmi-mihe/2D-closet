@@ -41,7 +41,7 @@
             <div class="curtain-side curtain-right"></div>
         </div>
 
-    <div id="loading-spinner" class="loading-overlay">Fitting Item...</div>
+        <div id="loading-spinner" class="loading-overlay">Fitting Item...</div>
         
         <img src="{{ url_for('static', filename='images/avatar.png') }}" alt="Dummy" class="avatar-dummy">
         
@@ -52,30 +52,22 @@
 <script>
 let currentCategory = 'top';
 const jsCache = {}; 
+let currentOutfit = {}; // Track what's currently worn
 
 async function wearItem(imgUrl, type) {
     const layer = document.getElementById('clothing-layer');
     const spinner = document.getElementById('loading-spinner');
     const curtain = document.getElementById('changing-curtain');
-    const cacheKey = imgUrl + type;
+    
+    // Normalize type (treat skirts as bottom for caching)
+    const normalizedType = (type === 'skirt' || type === 'skirts') ? 'bottom' : type;
 
     // 1. Close the curtains immediately
     curtain.classList.add('closed');
 
-    // Small delay to allow curtain animation to finish closing (approx 500ms)
+    // Small delay to allow curtain animation to finish closing
     setTimeout(async () => {
         
-        // Check Cache first for instant swap behind closed curtains
-        if (jsCache[cacheKey]) {
-            layer.src = jsCache[cacheKey];
-            layer.style.display = "block";
-            // Hold curtains closed for a split second to simulate a "change"
-            setTimeout(() => {
-                curtain.classList.remove('closed');
-            }, 400);
-            return;
-        }
-
         // Show Fitting text while AI works
         spinner.style.display = "block";
         layer.style.display = "none"; 
@@ -90,7 +82,17 @@ async function wearItem(imgUrl, type) {
             const data = await response.json();
 
             if (data.success) {
-                jsCache[cacheKey] = data.url;
+                // Update current outfit tracking
+                if (normalizedType === 'dress') {
+                    currentOutfit = { dress: imgUrl };
+                } else {
+                    if (currentOutfit.dress) {
+                        delete currentOutfit.dress;
+                    }
+                    currentOutfit[normalizedType] = imgUrl;
+                }
+
+                console.log('Current outfit:', currentOutfit);
 
                 // Pre-load image so it doesn't "pop" in after curtains open
                 const img = new Image();
@@ -104,6 +106,10 @@ async function wearItem(imgUrl, type) {
                         curtain.classList.remove('closed');
                     }, 300);
                 };
+            } else {
+                console.error("Try-on failed:", data.error);
+                spinner.style.display = "none";
+                curtain.classList.remove('closed');
             }
         } catch (error) {
             console.error("Try-on failed", error);
@@ -115,22 +121,47 @@ async function wearItem(imgUrl, type) {
 
 function showCategory(category) {
     currentCategory = category;
-    document.getElementById('category-heading').innerText = "My " + category.charAt(0).toUpperCase() + category.slice(1) + "s";
     
+    // Update heading
+    const categoryNames = {
+        'top': 'Tops',
+        'bottom': 'Pants',
+        'skirt': 'Skirts',
+        'dress': 'Dresses'
+    };
+    document.getElementById('category-heading').innerText = "My " + (categoryNames[category] || category);
+    
+    // Update active state
     document.querySelectorAll('.category-list li').forEach(li => li.classList.remove('active'));
-    
-    const activeId = (category === 'bottom') ? 'cat-bottom' : 'cat-' + category;
-    const activeEl = document.getElementById(activeId);
+    const activeEl = document.getElementById('cat-' + category);
     if(activeEl) activeEl.classList.add('active');
 
+    // Filter items
     document.querySelectorAll('.item-slot').forEach(item => {
-        item.style.display = (item.dataset.type === category) ? "flex" : "none";
+        const itemType = item.dataset.type;
+        // Show if type matches, or if showing skirts and item is skirt/skirts
+        const shouldShow = (itemType === category) || 
+                          (category === 'skirt' && (itemType === 'skirt' || itemType === 'skirts'));
+        item.style.display = shouldShow ? "flex" : "none";
     });
 }
 
-function clearOutfit() {
+async function clearOutfit() {
     const layer = document.getElementById('clothing-layer');
     const curtain = document.getElementById('changing-curtain');
+    
+    // Clear client-side tracking
+    currentOutfit = {};
+    
+    // Clear server-side tracking
+    try {
+        await fetch('/clear_outfit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+    } catch (e) {
+        console.error("Failed to clear server outfit:", e);
+    }
     
     curtain.classList.add('closed');
     setTimeout(() => {
@@ -169,7 +200,6 @@ async function deleteItem(event, imgUrl) {
         console.error("Delete failed", e);
     }
 }
-
 
 window.onload = () => showCategory('top');
 </script>

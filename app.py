@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 from flask_cors import CORS
 from PIL import Image
 import os
@@ -6,19 +6,23 @@ import uuid
 import mysql.connector
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from processing import fit_on_dummy
+from processing import fit_on_dummy, build_outfit
 
 app = Flask(__name__)
+app.secret_key = 'your-secret-key-here-change-in-production'  # Required for sessions
 CORS(app)
 
 UPLOAD_FOLDER = os.path.join("static", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Track current outfit per session
+outfit_tracker = {}
+
 # ------------------ DATABASE CONFIG ------------------
 DB_CONFIG = {
     "host": "localhost",
-    "user": "root",                   # Your MySQL username
-    "password": "password", # Your MySQL password
+    "user": "root",
+    "password": "password",
     "database": "closet_asmi"
 }
 
@@ -73,7 +77,7 @@ def upload_file():
     elif any(x in name for x in ["dress", "gown"]):
         g_type = "dress"
     elif any(x in name for x in ["skirt", "shorts"]):
-        g_type = "skirts"
+        g_type = "skirt"
     else:
         w, h = img.size
         g_type = "top" if h / w < 1.2 else "dress"
@@ -90,33 +94,104 @@ def upload_file():
         "type": g_type
     })
 
-# ------------------ TRY-ON ------------------
+# ------------------ TRY-ON (WITH OUTFIT TRACKING) ------------------
 @app.route("/tryon", methods=["POST"])
 def tryon():
     try:
         data = request.json
         image_url = data.get("image")
-        garment_type = data.get("type", "dress")
+        garment_type = data.get("type", "top")
 
         if not image_url:
             return jsonify({"success": False, "error": "No image URL provided"}), 400
 
+        # Get session ID
+        if 'user_id' not in session:
+            session['user_id'] = str(uuid.uuid4())
+        session_id = session['user_id']
+
+        # Initialize outfit tracker for this session
+        if session_id not in outfit_tracker:
+            outfit_tracker[session_id] = {}
+
         filename = os.path.basename(image_url)
         garment_path = os.path.join(UPLOAD_FOLDER, filename)
 
-        result_url = fit_on_dummy(garment_path, garment_type)
+        # Normalize garment type
+        if garment_type in ["skirts", "skirt"]:
+            normalized_type = "bottom"  # Treat skirts as bottoms for layering
+        else:
+            normalized_type = garment_type
+
+        # Update outfit tracker
+        if normalized_type == "dress":
+            # Dress replaces everything
+            outfit_tracker[session_id] = {"dress": garment_path}
+        else:
+            # Remove dress if adding top or bottom
+            if "dress" in outfit_tracker[session_id]:
+                del outfit_tracker[session_id]["dress"]
+            
+            # Add/update the garment
+            outfit_tracker[session_id][normalized_type] = garment_path
+
+        print(f"Current outfit for session {session_id}: {outfit_tracker[session_id]}")
+
+        # Build the complete outfit
+        result_url = build_outfit(outfit_tracker[session_id], session_id)
 
         if result_url:
             return jsonify({
                 "success": True,
                 "url": result_url,
-                "type": garment_type
+                "type": garment_type,
+                "current_outfit": list(outfit_tracker[session_id].keys())
             })
 
         return jsonify({"success": False, "error": "Image processing failed"}), 500
 
     except Exception as e:
         print("Server Error:", e)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ------------------ CLEAR OUTFIT ------------------
+@app.route("/clear_outfit", methods=["POST"])
+def clear_outfit_endpoint():
+    try:
+        if 'user_id' in session:
+            session_id = session['user_id']
+            if session_id in outfit_tracker:
+                outfit_tracker[session_id] = {}
+        
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ------------------ DELETE ITEM ------------------
+@app.route("/delete_item", methods=["POST"])
+def delete_item():
+    try:
+        data = request.json
+        image_url = data.get("image_url")
+        
+        if not image_url:
+            return jsonify({"success": False, "error": "No image URL provided"}), 400
+        
+        # Extract filename and construct path
+        filename = os.path.basename(image_url)
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # Delete the file if it exists
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": "File not found"}), 404
+            
+    except Exception as e:
+        print("Delete error:", e)
         return jsonify({"success": False, "error": str(e)}), 500
 
 # ------------------ AUTH ------------------
@@ -134,7 +209,6 @@ def auth():
         if not username or not password:
             error_msg = "Please fill both fields."
         else:
-            # Create a new connection per request
             try:
                 conn = mysql.connector.connect(**DB_CONFIG)
                 cursor = conn.cursor(dictionary=True)
@@ -156,6 +230,7 @@ def auth():
                     cursor.execute("SELECT * FROM users WHERE username=%s", (username,))
                     user = cursor.fetchone()
                     if user and check_password_hash(user['password'], password):
+                        session['username'] = username
                         return redirect(url_for("menu"))
                     else:
                         error_msg = "Invalid username or password."

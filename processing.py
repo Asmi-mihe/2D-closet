@@ -7,9 +7,11 @@ import uuid
 
 # Permanent session cache
 fitting_cache = {}
+# Track current outfit state per session (in production, use session management)
+outfit_state = {}
 
 
-def fit_on_dummy(input_path, garment_type, base_dummy_path=None):
+def fit_on_dummy(input_path, garment_type, base_dummy_path=None, session_id="default"):
     """
     Fits garment on dummy as a flat overlay (sticker-like) without body wrapping.
     Maintains aspect ratio and centers garment at anatomically correct positions.
@@ -18,11 +20,12 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None):
         input_path: Path to the garment image
         garment_type: 'top', 'bottom', or 'dress'
         base_dummy_path: Optional path to a previous result to overlay on (for combining garments)
+        session_id: Session identifier for tracking outfit state
     
     Returns:
         Relative URL path to the result image
     """
-    global fitting_cache
+    global fitting_cache, outfit_state
     script_dir = os.path.dirname(os.path.abspath(__file__))
    
     # 1. Check Cache
@@ -83,7 +86,7 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None):
     
     # Vertical anchor points - ADJUSTED for better positioning
     SHOULDER_Y = int(AV_H * 0.21)       # Shoulder line (tops/dresses start here)
-    WAIST_Y = int(AV_H * 0.40)         # Waist line (bottoms start here) - MOVED UP
+    WAIST_Y = int(AV_H * 0.40)          # Waist line (bottoms start here) - MOVED UP
     
     # 6. Calculate target dimensions based on garment type
     # CRITICAL: Maintain aspect ratio - scale by width, then calculate height
@@ -117,7 +120,7 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None):
         anchor_y = SHOULDER_Y
         print("Fitting TOP")
         
-    elif garment_type == "bottom":
+    elif garment_type in ["bottom", "skirt", "skirts"]:
         # Bottoms fit at waist/hips - IMPROVED POSITIONING
         target_w = HIP_WIDTH
         scale = target_w / w
@@ -130,7 +133,7 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None):
             target_w = int(target_h * (w / h))
         
         anchor_y = WAIST_Y
-        print("Fitting BOTTOM")
+        print(f"Fitting BOTTOM ({garment_type})")
         
     else:
         # Default fallback (treat as top)
@@ -194,66 +197,54 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None):
     return relative_url
 
 
-def fit_multiple_garments(garment_configs, script_dir=None):
+def build_outfit(garments_dict, session_id="default"):
     """
-    Fits multiple garments on the same dummy (e.g., top + bottom).
+    Builds a complete outfit by layering multiple garments.
     
     Args:
-        garment_configs: List of tuples [(garment_path, garment_type), ...]
-                        Example: [('shirt.png', 'top'), ('pants.png', 'bottom')]
-        script_dir: Optional script directory path
+        garments_dict: Dictionary with keys 'top', 'bottom', 'dress' containing file paths
+                      Example: {'top': 'path/to/shirt.png', 'bottom': 'path/to/pants.png'}
+        session_id: Session identifier
     
     Returns:
         Relative URL path to the final combined result
     """
-    if script_dir is None:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    if not garment_configs:
-        print("Error: No garments provided")
-        return None
-    
-    # Start with the base dummy
-    dummy_path = os.path.join(script_dir, 'static/images/avatar.png')
-    current_result = None
-    
-    # Apply each garment in order
-    for i, (garment_path, garment_type) in enumerate(garment_configs):
-        print(f"\n--- Applying garment {i+1}/{len(garment_configs)}: {garment_type} ---")
-        
-        if i == 0:
-            # First garment - use original dummy
-            result_url = fit_on_dummy(garment_path, garment_type, base_dummy_path=None)
-        else:
-            # Subsequent garments - overlay on previous result
-            previous_path = os.path.join(script_dir, current_result.lstrip('/'))
-            result_url = fit_on_dummy(garment_path, garment_type, base_dummy_path=previous_path)
-        
-        if result_url:
-            current_result = result_url
-        else:
-            print(f"Error: Failed to fit {garment_type}")
-            return current_result  # Return what we have so far
-    
-    print(f"\n✓ Successfully combined {len(garment_configs)} garments")
-    return current_result
-
-
-# Example usage
-if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    dummy_path = os.path.join(script_dir, 'static/images/avatar.png')
     
-    # Single garment examples:
-    # result = fit_on_dummy('top.png', 'top')
-    # result = fit_on_dummy('skirt.png', 'bottom')
-    # result = fit_on_dummy('dress.png', 'dress')
+    # Order matters: dress first (if present), then bottom, then top
+    # This ensures tops appear over bottoms
+    order = ['dress', 'bottom', 'skirt', 'skirts', 'top']
     
-    # Multiple garments (outfit combination):
-    # outfit = [
-    #     ('shirt.png', 'top'),
-    #     ('pants.png', 'bottom')
-    # ]
-    # result = fit_multiple_garments(outfit)
-    # print(f"Final result: {result}")
+    current_base = None
+    result_url = None
     
-    pass
+    for garment_type in order:
+        if garment_type in garments_dict and garments_dict[garment_type]:
+            garment_path = garments_dict[garment_type]
+            
+            if not os.path.exists(garment_path):
+                print(f"Warning: Garment not found: {garment_path}")
+                continue
+            
+            print(f"\n--- Layering {garment_type} ---")
+            
+            if current_base:
+                # Overlay on previous result
+                base_path = os.path.join(script_dir, current_base.lstrip('/'))
+                result_url = fit_on_dummy(garment_path, garment_type, base_dummy_path=base_path, session_id=session_id)
+            else:
+                # First garment - use original dummy
+                result_url = fit_on_dummy(garment_path, garment_type, session_id=session_id)
+            
+            if result_url:
+                current_base = result_url
+    
+    return result_url
+
+
+def clear_outfit_cache(session_id="default"):
+    """Clear outfit state for a session"""
+    global outfit_state
+    if session_id in outfit_state:
+        del outfit_state[session_id]
