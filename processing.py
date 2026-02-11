@@ -80,12 +80,12 @@ def fit_on_dummy(input_path, garment_type, base_dummy_path=None, session_id="def
     print(f"Original garment size: {w}x{h}")
    
     # 5. Anatomical reference points (proportional to dummy)
-    SHOULDER_WIDTH = int(AV_W * 0.46)   # Shoulder span
-    WAIST_WIDTH = int(AV_W * 0.42)      # Waist width
-    HIP_WIDTH = int(AV_W * 0.50)        # Hip width
+    SHOULDER_WIDTH = int(AV_W * 0.43)   # Shoulder span
+    WAIST_WIDTH = int(AV_W * 0.40)      # Waist width
+    HIP_WIDTH = int(AV_W * 0.49)        # Hip width
     
     # Vertical anchor points - ADJUSTED for better positioning
-    SHOULDER_Y = int(AV_H * 0.21)       # Shoulder line (tops/dresses start here)
+    SHOULDER_Y = int(AV_H * 0.22)       # Shoulder line (tops/dresses start here)
     WAIST_Y = int(AV_H * 0.40)          # Waist line (bottoms/skirts start here)
     
     # 6. Calculate target dimensions based on garment type
